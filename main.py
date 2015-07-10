@@ -54,16 +54,33 @@ def keyboard(key, x, y):
     if key == "\033": sys.exit()
 
 
+class GraphicsError(Exception):
+    pass
+
+
+class NoVertexShaderCodeError(GraphicsError):
+    pass
+
+
+class NoFragmentShaderCodeError(GraphicsError):
+    pass
+
+
+
 class Graphics(object):
 
     def __init__(self):
-        self._init_graphics()
+        self.window_width = 1280
+        self.window_height = 800
+        self.window_title = "pyfpsb"
+        self.vertex_shader_code = None
+        self.fragment_shader_code = None
 
-    def _init_graphics(self):
+    def init_graphics(self):
         glut.glutInit()
         glut.glutInitDisplayMode(glut.GLUT_DOUBLE | glut.GLUT_RGBA | glut.GLUT_DEPTH)
-        glut.glutCreateWindow("Hello world!")
-        glut.glutReshapeWindow(1280, 800)
+        glut.glutCreateWindow(self.window_title)
+        glut.glutReshapeWindow(self.window_width, self.window_height)
         glut.glutReshapeFunc(reshape)
         glut.glutDisplayFunc(display)
         glut.glutKeyboardFunc(keyboard)
@@ -101,12 +118,16 @@ class Graphics(object):
         gl.glUniformMatrix4fv(loc, 1, gl.GL_FALSE, p)
 
     def create_program(self):
+        if not self.vertex_shader_code:
+            raise NoVertexShaderCodeError("No vertex shader defined for instance of class Graphics")
+        if not self.fragment_shader_code:
+            raise NoFragmentShaderCodeError("No fragment shader defined for instance of class Graphics")
         self.vertex_shader = Shader(ShaderType.VERTEX)
-        self.vertex_shader.set_shader_source(vertex_shader_code)
+        self.vertex_shader.set_shader_source(self.vertex_shader_code)
         self.vertex_shader.compile()
 
         self.fragment_shader = Shader(ShaderType.FRAGMENT)
-        self.fragment_shader.set_shader_source(fragment_shader_code)
+        self.fragment_shader.set_shader_source(self.fragment_shader_code)
         self.fragment_shader.compile()
 
         self.program = Program()
@@ -121,8 +142,10 @@ class Graphics(object):
 
 if __name__ == "__main__":
     g = Graphics()
+    g.vertex_shader_code = vertex_shader_code
+    g.fragment_shader_code = fragment_shader_code
+    g.init_graphics()
     data, indices = load_data()
     g.create_program()
     g.set_data(data, indices)
-
     g.start()
