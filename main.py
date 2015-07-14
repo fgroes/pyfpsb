@@ -10,22 +10,23 @@ from shader_codes import vertex_shader_code, fragment_shader_code
 from data import load_data, load_cube
 
 
-global graphics
-global position
-global angle
-global velocity
-global angle_velocity
-position = np.zeros((3), dtype=np.float32)
-angle = 0
-velocity = 0.1
-angle_velocity = 0.1
-
-
 def translate(v):
     t = np.eye(4, 4, dtype=np.float32)
     t[0:3, 3] = v
     return t
 
+
+def rotate_x(angle):
+    r = np.eye(4, 4, dtype=np.float32)
+    c = np.cos(angle)
+    s = np.sin(angle)
+    r[0, 0] = 1.0
+    r[1, 1] = c
+    r[1, 2] = -s
+    r[2, 1] = s
+    r[2, 2] = c
+    r[3, 3] = 1.0
+    return r
 
 def rotate_y(angle):
     r = np.eye(4, 4, dtype=np.float32)
@@ -36,6 +37,18 @@ def rotate_y(angle):
     r[2, 0] = -s
     r[2, 2] = c
     r[1, 1] = 1.0
+    r[3, 3] = 1.0
+    return r
+
+def rotate_z(angle):
+    r = np.eye(4, 4, dtype=np.float32)
+    c = np.cos(angle)
+    s = np.sin(angle)
+    r[0, 0] = c
+    r[0, 1] = -s
+    r[1, 0] = s
+    r[1, 1] = c
+    r[2, 2] = 1.0
     r[3, 3] = 1.0
     return r
 
@@ -63,66 +76,6 @@ def perspective_fov(angle, aspect, near, far):
     return p
 
 
-def display():
-    global position
-    global angle
-    #m = translate(np.array([0.0, 0.0, 0.0], dtype=np.float32))
-    R_m = rotate_y(angle)
-    T = translate(np.array([0.0, 0.0, -8.0], dtype=np.float32))
-    M = np.array(np.matrix(T) * np.matrix(R_m))
-    # m = t
-    loc = gl.glGetUniformLocation(graphics.program.program_id, "model")
-    gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, M)
-
-    V = np.eye(4, 4, dtype=np.float32)
-    #r = rotate_y(angle)
-    P_pos = translate(position)
-    V = P_pos
-    loc = gl.glGetUniformLocation(graphics.program.program_id, "view")
-    gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, V)
-
-    #P = perspective(1.0, 10.0, -3.0, 3.0, -2.0, 2.0)
-    P = perspective_fov(np.pi / 10, 16.0 / 10.0, -1.0, -10.0)
-    PVM = np.array(np.matrix(P) * np.matrix(V) * np.matrix(M))
-    loc = gl.glGetUniformLocation(graphics.program.program_id, "pvm")
-    gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, PVM)
-
-    print(np.matrix(PVM) * np.matrix([[0.5, 0.5, 5, 1.0]]).T)
-
-
-    gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-    #gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6)
-    gl.glDrawElements(gl.GL_TRIANGLES, graphics.indices.size, gl.GL_UNSIGNED_SHORT, ctypes.c_void_p(0))
-    glut.glutSwapBuffers()
-
-
-def reshape(width, height):
-    gl.glViewport(0, 0, width, height)
-
-
-def keyboard(key, x, y):
-    global position
-    global angle
-    global velocity
-    global angle_velocity
-    if key == "\033":
-        sys.exit()
-    elif key == "w":
-        position[2] -= velocity
-        # position[2] -= np.cos(angle) * velocity
-        # position[0] -= np.sin(angle) * velocity
-    elif key == "s":
-        position[2] += velocity
-        # position[2] += np.cos(angle) * velocity
-        # position[0] += np.sin(angle) * velocity
-    elif key == "a":
-        angle += angle_velocity
-    elif key == "d":
-        angle -= angle_velocity
-    print((angle, position))
-    glut.glutPostRedisplay()
-
-
 class GraphicsError(Exception):
     pass
 
@@ -144,16 +97,80 @@ class Graphics(object):
         self.window_title = "pyfpsb"
         self.vertex_shader_code = None
         self.fragment_shader_code = None
+        self.position = np.zeros((3), dtype=np.float32)
+        self._mouse_x = 0
+        self._mouse_y = 0
+        self.angle_x = 0
+        self.angle_y = 0
+        self.velocity = 0.1
+        self.angle_velocity = 0.02
 
     def init_graphics(self):
         glut.glutInit()
         glut.glutInitDisplayMode(glut.GLUT_DOUBLE | glut.GLUT_RGBA | glut.GLUT_DEPTH)
         glut.glutCreateWindow(self.window_title)
         glut.glutReshapeWindow(self.window_width, self.window_height)
-        glut.glutReshapeFunc(reshape)
-        glut.glutDisplayFunc(display)
-        glut.glutKeyboardFunc(keyboard)
+        glut.glutReshapeFunc(self.reshape)
+        glut.glutDisplayFunc(self.display)
+        glut.glutKeyboardFunc(self.keyboard)
+        glut.glutMouseFunc(self.mouse)
+        glut.glutPassiveMotionFunc(self.mouse_move)
         gl.glEnable(gl.GL_DEPTH_TEST)
+
+    def display(self):
+        #m = translate(np.array([0.0, 0.0, 0.0], dtype=np.float32))
+        T = translate(np.array([0.0, 0.0, -5.0], dtype=np.float32))
+        M = np.array(np.matrix(T))
+        # m = t
+        # loc = gl.glGetUniformLocation(self.program.program_id, "model")
+        # gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, M)
+
+        V = np.eye(4, 4, dtype=np.float32)
+        #r = rotate_y(angle)
+        P_pos = translate(self.position)
+        V_R_y = rotate_y(self.angle_y)
+        V = np.array(np.matrix(V_R_y) * np.matrix(P_pos))
+        # loc = gl.glGetUniformLocation(self.program.program_id, "view")
+        # gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, V)
+        x = 0.5
+        aspect = 1.0 * self.window_width / self.window_height
+        P = perspective(1.0, 10.0, x, - x, x / aspect, - x / aspect)
+        #P = perspective_fov(np.pi / 10, 16.0 / 10.0, 1.0, 20.0)
+        PVM = np.array(np.matrix(P) * np.matrix(V) * np.matrix(M))
+        loc = gl.glGetUniformLocation(self.program.program_id, "pvm")
+        gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, PVM)
+
+
+        gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+        #gl.glDrawArrays(gl.GL_TRIANGLES, 0, 6)
+        gl.glDrawElements(gl.GL_TRIANGLES, self.indices.size, gl.GL_UNSIGNED_SHORT, ctypes.c_void_p(0))
+        glut.glutSwapBuffers()
+
+    def keyboard(self, key, x, y):
+        if key == "\033":
+            sys.exit()
+        elif key == "w":
+            self.position[2] += self.velocity
+            # position[2] -= np.cos(angle) * velocity
+            # position[0] -= np.sin(angle) * velocity
+        elif key == "s":
+            self.position[2] -= self.velocity
+            # position[2] += np.cos(angle) * velocity
+            # position[0] += np.sin(angle) * velocity
+        glut.glutPostRedisplay()
+
+    def mouse(self, button, state, x, y):
+        print(button, state, x, y)
+
+    def mouse_move(self, x, y):
+        self.angle_y += -self.angle_velocity * (1.0 * (x) / self.window_width - 0.5)
+        self.angle_x += -self.angle_velocity * (1.0 * (y) / self.window_height - 0.5)
+        self._mouse_x = x
+        self._mouse_y = y
+        glut.glutPostRedisplay()
+
+    def reshape(self, width, height):
+        gl.glViewport(0, 0, width, height)
 
     def set_data(self, data, indices):
         self.data = data
@@ -176,11 +193,11 @@ class Graphics(object):
         gl.glBufferData(gl.GL_ELEMENT_ARRAY_BUFFER, self.indices.nbytes, self.indices, gl.GL_STATIC_DRAW)
         gl.glEnableVertexAttribArray(1)
 
-        p = perspective(2.0, 10.0, 6.0, -6.0, 4.0, -4.0)
+        #p = perspective(2.0, 10.0, 6.0, -6.0, 4.0, -4.0)
         #p = perspective_fov(2.0, 16.0 / 9.0, -2.0, -10.0)
         # glu.gluPerspective(2.0, 16.0 / 9.0, -2.0, -10.0)
-        loc = gl.glGetUniformLocation(self.program.program_id, "projection")
-        gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, p)
+        # loc = gl.glGetUniformLocation(self.program.program_id, "projection")
+        # gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, p)
 
     def create_program(self):
         if not self.vertex_shader_code:
