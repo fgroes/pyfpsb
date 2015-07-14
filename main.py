@@ -28,6 +28,7 @@ def rotate_x(angle):
     r[3, 3] = 1.0
     return r
 
+
 def rotate_y(angle):
     r = np.eye(4, 4, dtype=np.float32)
     c = np.cos(angle)
@@ -39,6 +40,7 @@ def rotate_y(angle):
     r[1, 1] = 1.0
     r[3, 3] = 1.0
     return r
+
 
 def rotate_z(angle):
     r = np.eye(4, 4, dtype=np.float32)
@@ -86,7 +88,6 @@ class NoVertexShaderCodeError(GraphicsError):
 
 class NoFragmentShaderCodeError(GraphicsError):
     pass
-
 
 
 class Graphics(object):
