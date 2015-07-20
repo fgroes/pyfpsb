@@ -99,12 +99,10 @@ class Graphics(object):
         self.vertex_shader_code = None
         self.fragment_shader_code = None
         self.position = np.zeros((3), dtype=np.float32)
-        self._mouse_x = 0
-        self._mouse_y = 0
-        self.angle_x = 0
-        self.angle_y = 0
+        self.angle = np.zeros((3), dtype=np.float32)
+        self._last_mouse = np.zeros((2), dtype=np.float32)
         self.velocity = 0.1
-        self.angle_velocity = 0.02
+        self.angle_velocity = 0.002
 
     def init_graphics(self):
         glut.glutInit()
@@ -114,7 +112,7 @@ class Graphics(object):
         glut.glutReshapeFunc(self.reshape)
         glut.glutDisplayFunc(self.display)
         glut.glutKeyboardFunc(self.keyboard)
-        glut.glutMouseFunc(self.mouse)
+        #glut.glutMouseFunc(self.mouse)
         glut.glutPassiveMotionFunc(self.mouse_move)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
@@ -128,9 +126,11 @@ class Graphics(object):
 
         V = np.eye(4, 4, dtype=np.float32)
         #r = rotate_y(angle)
-        P_pos = translate(self.position)
-        V_R_y = rotate_y(self.angle_y)
-        V = np.array(np.matrix(V_R_y) * np.matrix(P_pos))
+        #P_pos = translate(- self.position)
+        #V_R_x = rotate_x(self.angle[0])
+        V_R_y = rotate_y(self.angle[1])
+        #V = np.array(np.matrix(V_R_y).I * np.matrix(translate(-self.position)))
+        V = np.array((np.matrix(translate(self.position)) * np.matrix(V_R_y)).I)
         # loc = gl.glGetUniformLocation(self.program.program_id, "view")
         # gl.glUniformMatrix4fv(loc, 1, gl.GL_TRUE, V)
         x = 0.5
@@ -151,23 +151,44 @@ class Graphics(object):
         if key == "\033":
             sys.exit()
         elif key == "w":
-            self.position[2] += self.velocity
-            # position[2] -= np.cos(angle) * velocity
-            # position[0] -= np.sin(angle) * velocity
+            self.position[0] -= self.velocity * np.sin(self.angle[1])
+            self.position[2] -= self.velocity * np.cos(self.angle[1])
+            #self.position[1] -= self.velocity * np.sin(self.angle[0])
         elif key == "s":
-            self.position[2] -= self.velocity
-            # position[2] += np.cos(angle) * velocity
-            # position[0] += np.sin(angle) * velocity
+            self.position[0] += self.velocity * np.sin(self.angle[1])
+            self.position[2] += self.velocity * np.cos(self.angle[1])
+            #self.position[1] += self.velocity * np.sin(self.angle[0])
+        elif key == "d":
+            self.position[0] += self.velocity * np.cos(self.angle[1])
+            self.position[2] -= self.velocity * np.sin(self.angle[1])
+        elif key == "a":
+            self.position[0] -= self.velocity * np.cos(self.angle[1])
+            self.position[2] += self.velocity * np.sin(self.angle[1])
         glut.glutPostRedisplay()
 
     def mouse(self, button, state, x, y):
         print(button, state, x, y)
 
     def mouse_move(self, x, y):
-        self.angle_y += -self.angle_velocity * (1.0 * (x) / self.window_width - 0.5)
-        self.angle_x += -self.angle_velocity * (1.0 * (y) / self.window_height - 0.5)
-        self._mouse_x = x
-        self._mouse_y = y
+        delta = 10
+        current_mouse = np.array([x - self.window_width / 2.0, y - self.window_height / 2.0])
+        diff = current_mouse - self._last_mouse
+        #self.angle[0] += diff[1] * self.angle_velocity
+        self.angle[1] -= diff[0] * self.angle_velocity
+        self._last_mouse = current_mouse
+        warp = False
+        new_x = x
+        new_y = y
+        if x <= delta or self.window_width - delta <= x:
+            warp = True
+            new_x = self.window_width / 2.0
+            self._last_mouse[0] = new_x
+        if y <= delta or self.window_height - delta <= y:
+            warp = True
+            new_y = self.window_height / 2.0
+            self._last_mouse[1] = new_y
+        if warp:
+            glut.glutWarpPointer(int(new_x), int(new_y))
         glut.glutPostRedisplay()
 
     def reshape(self, width, height):
